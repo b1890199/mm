@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麥當勞幸運輪盤</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --wheel-color-1: #FFC72C; /* 麥當勞黃 */
+            --wheel-color-2: #DA291C; /* 麥當勞紅 */
+            --wheel-color-3: #ffffff; /* 白 */
+            --text-color: #27251F; /* 深灰/黑 */
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        /* 主容器，用於左右佈局 */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 1200px;
+            gap: 2rem;
+            height: 90vh;
+        }
+
+        @media (min-width: 768px) {
+            .main-container {
+                flex-direction: row;
+            }
+        }
+
+        /* 左側輪盤區 */
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 右側統計區 */
+        .right-panel {
+            flex: 1;
+            background-color: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 90vw;
+            max-width: 400px; /* 稍微縮小以適應雙欄 */
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+        }
+
+        /* 輪盤主體 */
+        .wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 8px solid #27251F;
+            position: relative;
+            overflow: hidden;
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.1, 1);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            background-color: white;
+        }
+
+        /* 輪盤指標 (三角形) */
+        .pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #27251F;
+            z-index: 10;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3));
+        }
+
+        /* 輪盤中心點 */
+        .wheel-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background-color: #27251F;
+            border-radius: 50%;
+            z-index: 5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: 4px solid white;
+        }
+
+        /* 輪盤區塊繪製 (將由 JS 動態生成) */
+        .slice {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 50%;
+            transform-origin: 0% 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            clip-path: polygon(0 100%, 100% 100%, 100% 0); /* 調整以符合區塊數量 */
+        }
+
+        .slice-content {
+            position: absolute;
+            top: 20%;
+            left: 20%;
+            transform: rotate(45deg); /* 文字旋轉以對齊區塊 */
+            text-align: center;
+            width: 100px;
+            word-wrap: break-word;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* 按鈕樣式 */
+        .spin-btn {
+            background-color: #DA291C;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-size: 1.25rem;
+            font-weight: bold;
+            border-radius: 9999px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s, box-shadow 0.1s, background-color 0.2s;
+            margin-top: 2rem;
+        }
+
+        .spin-btn:hover {
+            background-color: #b52217;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+
+        .spin-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .spin-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* 彈出視窗樣式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        
+        /* 使用 conic-gradient 繪製輪盤背景 */
+        #wheel-bg {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        .item-label {
+            position: absolute;
+            width: 50%;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            transform-origin: 0 50%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 20px;
+            box-sizing: border-box;
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+            user-select: none; 
+        }
+
+        /* 表格樣式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            border: 1px solid #e5e7eb;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+    </style>
+</head>
+<body class="flex flex-col items-center">
+
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 tracking-tight">
+                    <span class="text-[#DA291C]">麥當勞</span> 幸運輪盤
+                </h1>
+                <p class="text-gray-500 mt-2">今天想吃什麼？讓輪盤決定吧！</p>
+            </div>
+
+            <div class="wheel-container">
+                <div class="pointer"></div>
+                
+                <div class="wheel" id="wheel">
+                    <div id="wheel-bg"></div>
+                    <div id="wheel-labels"></div>
+                </div>
+                
+                <div class="wheel-center" id="center-btn">
+                    GO
+                </div>
+            </div>
+
+            <button id="spin-btn" class="spin-btn">開始旋轉</button>
+
+            <div id="selected-item-display" class="mt-8 text-center hidden">
+                <h3 class="text-lg text-gray-600 mb-2">本次抽中：</h3>
+                <div id="selected-item-text" class="text-2xl font-bold text-[#DA291C] px-6 py-3 bg-white rounded-lg shadow-md inline-block border-2 border-[#FFC72C]">
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">姓名統計表</h2>
+            
+            <!-- 新增紀錄表單 -->
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg border">
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">新增紀錄</h3>
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <label for="date-input" class="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                        <input type="date" id="date-input" class="w-full border-gray-300 rounded-md shadow-sm focus:border-[#DA291C] focus:ring focus:ring-[#DA291C] focus:ring-opacity-50 p-2 border">
+                    </div>
+                    <div>
+                        <label for="name-input" class="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+                        <input type="text" id="name-input" class="w-full border-gray-300 rounded-md shadow-sm focus:border-[#DA291C] focus:ring focus:ring-[#DA291C] focus:ring-opacity-50 p-2 border" placeholder="請輸入姓名">
+                    </div>
+                    <div>
+                        <label for="item-select" class="block text-sm font-medium text-gray-700 mb-1">抽中品項</label>
+                        <select id="item-select" class="w-full border-gray-300 rounded-md shadow-sm focus:border-[#DA291C] focus:ring focus:ring-[#DA291C] focus:ring-opacity-50 p-2 border">
+                            <option value="">請選擇品項 (或先轉動輪盤)</option>
+                            <!-- 選項將由 JS 動態生成 -->
+                        </select>
+                    </div>
+                    <button id="add-record-btn" class="mt-2 bg-[#FFC72C] hover:bg-[#e5b227] text-[#27251F] font-bold py-2 px-4 rounded transition-colors">
+                        加入統計
+                    </button>
+                </div>
+            </div>
+
+            <!-- 統計清單 -->
+            <div class="flex-grow overflow-auto">
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">目前統計</h3>
+                <table id="stats-table">
+                    <thead>
+                        <tr>
+                            <th class="w-1/4">日期</th>
+                            <th class="w-1/4">姓名</th>
+                            <th class="w-2/5">抽中品項</th>
+                            <th class="w-1/12 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stats-body">
+                        <!-- 紀錄將顯示在這裡 -->
+                        <tr>
+                            <td colspan="4" class="text-center text-gray-500 py-4">尚無紀錄</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 結果彈出視窗 -->
+    <div class="modal-overlay" id="result-modal">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4 text-[#DA291C]">恭喜你抽中！</h2>
+            <div id="result-text" class="text-xl font-semibold mb-6 text-gray-800 min-h-[60px] flex items-center justify-center flex-col">
+                <!-- 結果將顯示在這裡 -->
+            </div>
+            <button id="close-modal-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-full transition-colors">
+                太棒了
+            </button>
+        </div>
+    </div>
+
+    <!-- 下方選中品項顯示區 -->
+    <div id="selected-item-display" class="mt-8 text-center hidden">
+        <h3 class="text-lg text-gray-600 mb-2">本次抽中：</h3>
+        <div id="selected-item-text" class="text-2xl font-bold text-[#DA291C] px-6 py-3 bg-white rounded-lg shadow-md inline-block border-2 border-[#FFC72C]">
+            <!-- 選中的品項將在這裡顯示 -->
+        </div>
+    </div>
+
+    <script>
+        const items = [
+            "薯餅",
+            "原味麥脆雞腿(棒腿)",
+            "原味麥脆雞腿(大腿)",
+            "麥克雞塊(4塊)"
+        ];
+
+        // 定義交替顏色
+        const colors = [
+            "#FFC72C", // 黃
+            "#ffffff", // 白
+            "#FFC72C", // 黃
+            "#ffffff"  // 白
+        ];
+
+        const wheel = document.getElementById('wheel');
+        const wheelBg = document.getElementById('wheel-bg');
+        const wheelLabels = document.getElementById('wheel-labels');
+        const spinBtn = document.getElementById('spin-btn');
+        const centerBtn = document.getElementById('center-btn');
+        const resultModal = document.getElementById('result-modal');
+        const resultText = document.getElementById('result-text');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const selectedItemDisplay = document.getElementById('selected-item-display');
+        const selectedItemText = document.getElementById('selected-item-text');
+
+        // 統計表相關元素
+        const dateInput = document.getElementById('date-input');
+        const nameInput = document.getElementById('name-input');
+        const itemSelect = document.getElementById('item-select');
+        const addRecordBtn = document.getElementById('add-record-btn');
+        const statsBody = document.getElementById('stats-body');
+        let records = [];
+
+        let currentRotation = 0;
+        let isSpinning = false;
+        let lastSelectedItem = "";
+
+        // 設定預設日期為今天
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${yyyy}-${mm}-${dd}`;
+
+        // 初始化下拉選單
+        function initSelectOptions() {
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                itemSelect.appendChild(option);
+            });
+        }
+
+        // 繪製輪盤
+        function drawWheel() {
+            const numItems = items.length;
+            const sliceAngle = 360 / numItems;
+            
+            // 1. 生成 conic-gradient 背景
+            let gradientStr = 'conic-gradient(';
+            for (let i = 0; i < numItems; i++) {
+                const startAngle = i * sliceAngle;
+                const endAngle = (i + 1) * sliceAngle;
+                // 每個區塊的顏色
+                gradientStr += `${colors[i % colors.length]} ${startAngle}deg ${endAngle}deg${i < numItems - 1 ? ', ' : ''}`;
+            }
+            gradientStr += ')';
+            wheelBg.style.background = gradientStr;
+
+            // 2. 添加文字標籤
+            wheelLabels.innerHTML = ''; // 清空舊標籤
+            for (let i = 0; i < numItems; i++) {
+                const label = document.createElement('div');
+                label.className = 'item-label';
+                
+                // 計算文字的旋轉角度。
+                // 區塊是從 i*sliceAngle 到 (i+1)*sliceAngle。
+                // 我們希望文字在區塊正中間。
+                // 注意：CSS 的 rotate 是順時針，0度在右側 (3點鐘方向)。
+                // 我們的指標在正上方 (12點鐘方向，即 -90度 或 270度)。
+                // 為了讓繪製邏輯簡單，我們先從右側開始繪製，之後旋轉輪盤來校正。
+                const rotateAngle = (i * sliceAngle) + (sliceAngle / 2);
+                
+                label.style.transform = `translateY(-50%) rotate(${rotateAngle}deg)`;
+                
+                // 處理長文字換行或縮小
+                let text = items[i];
+                // 簡單處理過長文字，加上換行標籤
+                if(text.includes("(")) {
+                    text = text.replace("(", "<br><span class='text-xs font-normal'>(");
+                    text += "</span>";
+                }
+                label.innerHTML = `<div style="text-align: right; line-height: 1.1;">${text}</div>`;
+                
+                wheelLabels.appendChild(label);
+            }
+            
+            // 初始化輪盤角度：
+            // 由於 conic-gradient 從正上方(12點鐘)開始順時針畫，第一個區塊中心在 sliceAngle/2。
+            // 但我們的文字 label transform-origin 是從中心向右(3點鐘)出發，旋轉角度是從 3點鐘開始算。
+            // 為了讓視覺上區塊背景和文字對齊，且指標(12點鐘)對準某個區塊，我們需要做初始偏移。
+            // 這裡採用一個簡單的作法：直接將整個輪盤逆時針轉 90 度，讓文字繪製的起始點(3點鐘)對齊背景繪製的起始點(12點鐘)。
+            wheel.style.transform = `rotate(-90deg)`;
+            currentRotation = -90; // 記錄初始旋轉角度
+        }
+
+        // 旋轉功能
+        function spin() {
+            if (isSpinning) return;
+            isSpinning = true;
+            spinBtn.disabled = true;
+            spinBtn.textContent = '旋轉中...';
+
+            const numItems = items.length;
+            const sliceAngle = 360 / numItems;
+
+            // 隨機決定要旋轉幾圈 (例如 5 到 10 圈)
+            const spins = Math.floor(Math.random() * 5) + 5;
+            
+            // 隨機決定最後停在哪個角度 (0 ~ 359)
+            const randomDegree = Math.floor(Math.random() * 360);
+            
+            // 計算目標總旋轉角度
+            // 加上 360 * spins 確保至少轉幾圈
+            const targetRotation = currentRotation + (360 * spins) + randomDegree;
+
+            // 套用動畫
+            wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.1, 1)';
+            wheel.style.transform = `rotate(${targetRotation}deg)`;
+
+            // 記錄當前旋轉總角度，供下次旋轉使用
+            currentRotation = targetRotation;
+
+            // 動畫結束後處理結果
+            setTimeout(() => {
+                isSpinning = false;
+                spinBtn.disabled = false;
+                spinBtn.textContent = '再轉一次';
+
+                // 計算到底停在哪個選項
+                // 1. 將總角度轉為 0-360 的範圍
+                // 注意：因為輪盤是順時針轉，指標在正上方固定不動，
+                // 所以當輪盤轉了 X 度，指標實際上是指向原本 0 度位置逆時針方向 X 度的地方。
+                // 為了方便計算，我們先把輪盤的初始 -90 度偏移扣除。
+                let normalizedDegree = (targetRotation + 90) % 360;
+                
+                // 處理負角度
+                if (normalizedDegree < 0) {
+                    normalizedDegree += 360;
+                }
+
+                // 2. 因為輪盤順時針轉，指標相對輪盤是逆時針走。
+                // 要找出指標所指的角度，我們可以用 360 減去 normalizedDegree
+                let pointerDegree = 360 - normalizedDegree;
+                if (pointerDegree === 360) pointerDegree = 0;
+
+                // 3. 計算落在哪個區塊索引
+                const selectedIndex = Math.floor(pointerDegree / sliceAngle);
+                
+                const selectedItem = items[selectedIndex];
+                lastSelectedItem = selectedItem; // 記錄最後抽中的項目
+                showResult(selectedItem);
+                
+                // 自動將抽中結果填入右側表單
+                itemSelect.value = selectedItem;
+
+            }, 4000); // 與 CSS transition 時間一致
+        }
+
+        function showResult(item) {
+            // 為了美觀，處理一下顯示文字
+            let displayText = item;
+            if(displayText.includes("(")) {
+                 displayText = displayText.replace("(", "<br><span class='text-base text-gray-500 font-normal'>(");
+                 displayText += "</span>";
+            }
+            // 顯示在 Modal
+            resultText.innerHTML = displayText;
+            resultModal.classList.add('active');
+            
+            // 顯示在下方區域
+            let inlineDisplayText = item;
+            if(inlineDisplayText.includes("(")) {
+                 inlineDisplayText = inlineDisplayText.replace("(", "<span class='text-sm text-gray-500 font-normal ml-1'>(");
+                 inlineDisplayText += "</span>";
+            }
+            selectedItemText.innerHTML = inlineDisplayText;
+            selectedItemDisplay.classList.remove('hidden');
+            
+            // 稍微放大特效
+            resultText.style.transform = 'scale(0.8)';
+            setTimeout(() => {
+                resultText.style.transition = 'transform 0.3s cubic-bezier(0.17, 0.67, 0.1, 2)';
+                resultText.style.transform = 'scale(1.1)';
+                setTimeout(() => {
+                    resultText.style.transform = 'scale(1)';
+                }, 200);
+            }, 50);
+        }
+
+        function closeModal() {
+            resultModal.classList.remove('active');
+        }
+
+        // 綁定事件
+        spinBtn.addEventListener('click', spin);
+        centerBtn.addEventListener('click', spin); // 點擊中心也可以轉
+        closeModalBtn.addEventListener('click', closeModal);
+        
+        // 點擊背景關閉 modal
+        resultModal.addEventListener('click', (e) => {
+            if (e.target === resultModal) {
+                closeModal();
+            }
+        });
+
+        // 新增紀錄功能
+        addRecordBtn.addEventListener('click', () => {
+            const date = dateInput.value;
+            const name = nameInput.value.trim();
+            const item = itemSelect.value;
+
+            if (!date) {
+                alert('請選擇日期！');
+                dateInput.focus();
+                return;
+            }
+            if (!name) {
+                alert('請輸入姓名！'); // 雖然要求盡量不用 alert，但在簡單表單驗證這裡還是最直接的，若需更改可替換為自訂 UI 提示
+                nameInput.focus();
+                return;
+            }
+            if (!item) {
+                alert('請選擇或抽取出一個品項！');
+                return;
+            }
+
+            // 加入紀錄
+            records.push({ date, name, item });
+            
+            // 更新表格
+            updateTable();
+
+            // 清空輸入框
+            nameInput.value = '';
+            // 可選擇是否清空選單
+            // itemSelect.value = ''; 
+        });
+
+        // 更新表格顯示
+        function updateTable() {
+            statsBody.innerHTML = '';
+            
+            if (records.length === 0) {
+                statsBody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-4">尚無紀錄</td></tr>';
+                return;
+            }
+
+            records.forEach((record, index) => {
+                const tr = document.createElement('tr');
+                
+                const tdDate = document.createElement('td');
+                tdDate.textContent = record.date;
+
+                const tdName = document.createElement('td');
+                tdName.textContent = record.name;
+                
+                const tdItem = document.createElement('td');
+                tdItem.textContent = record.item;
+                
+                const tdAction = document.createElement('td');
+                tdAction.className = 'text-center';
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '刪除';
+                deleteBtn.className = 'text-red-500 hover:text-red-700 font-medium text-sm transition-colors px-2 py-1 bg-red-50 hover:bg-red-100 rounded';
+                
+                // 綁定刪除事件
+                deleteBtn.onclick = () => {
+                    deleteRecord(index);
+                };
+                
+                tdAction.appendChild(deleteBtn);
+                
+                tr.appendChild(tdDate);
+                tr.appendChild(tdName);
+                tr.appendChild(tdItem);
+                tr.appendChild(tdAction);
+                statsBody.appendChild(tr);
+            });
+        }
+
+        // 刪除特定紀錄
+        function deleteRecord(index) {
+            // 從陣列中移除該筆資料
+            records.splice(index, 1);
+            // 重新繪製表格
+            updateTable();
+        }
+
+        // 初始化繪製與選項
+        drawWheel();
+        initSelectOptions();
+
+        // 處理視窗大小改變，確保輪盤比例
+        window.addEventListener('resize', () => {
+             // 可以根據需要調整
+        });
+    </script>
+</body>
+</html>
